@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Admin • Manage VPs</h2>
+  <p class="small">Only Admin can add/edit VP names and personal info. Principal can view this info while evaluating.</p>
+</div>
+
+<div class="card">
+  <h3>Add VP</h3>
+  <form method="post" action="/admin/vps/add">
+    <div class="grid">
+      <div>
+        <label class="small">VP ID (unique)</label>
+        <input name="vp_id" placeholder="e.g., vp_primary" required>
+      </div>
+      <div>
+        <label class="small">Name</label>
+        <input name="name" placeholder="VP - Primary" required>
+      </div>
+      <div>
+        <label class="small">Email</label>
+        <input name="email" placeholder="vp.primary@school.ae">
+      </div>
+      <div>
+        <label class="small">Phase</label>
+        <input name="phase" placeholder="Primary / Middle / Secondary">
+      </div>
+    </div>
+    <div style="height:10px"></div>
+    <label class="small">Notes</label>
+    <textarea name="notes" placeholder="Any personal/profile notes you want Principal to see."></textarea>
+    <div style="height:10px"></div>
+    <button class="btn" type="submit">Add VP</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Existing VPs</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Phase</th><th>Notes</th><th></th></tr></thead>
+    <tbody>
+      {% for vp in vps %}
+      <tr>
+        <td class="small">{{ vp.id }}</td>
+        <td><strong>{{ vp.name }}</strong></td>
+        <td class="small">{{ vp.email or "-" }}</td>
+        <td class="small">{{ vp.phase or "-" }}</td>
+        <td class="small">{{ (vp.notes or "-")[:120] }}</td>
+        <td class="row-actions">
+          <a class="btn secondary" href="/admin/vps/edit/{{ vp.id }}">Edit</a>
+          <form method="post" action="/admin/vps/delete/{{ vp.id }}" onsubmit="return confirm('Delete VP {{ vp.name }}?');">
+            <button class="btn secondary" type="submit">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:520px;margin:40px auto;">
+  <h2>Login</h2>
+  <p class="small">Admin can manage VP profiles. Principal can enter actuals and review scoring.</p>
+  <form method="post" action="/login">
+    <label class="small">Email</label>
+    <input type="text" name="email" placeholder="name@school.ae" required>
+    <div style="height:10px"></div>
+    <label class="small">Password</label>
+    <input type="password" name="password" required>
+    <div style="height:14px"></div>
+    <button class="btn" type="submit">Sign in</button>
+  </form>
+</div>
+{% endblock %}

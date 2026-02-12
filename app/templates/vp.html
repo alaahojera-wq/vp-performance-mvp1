@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <div class="row-actions" style="justify-content:space-between">
+    <div>
+      <h2>{{ vp.name }}</h2>
+      <div class="small">Term: <strong>{{ term }}</strong></div>
+      {% if vp.email or vp.phase %}
+        <div class="small">Info: {{ vp.phase or "-" }} • {{ vp.email or "-" }}</div>
+      {% endif %}
+      {% if vp.notes %}
+        <div class="small">Notes: {{ vp.notes }}</div>
+      {% endif %}
+    </div>
+    <div>
+      <a class="btn secondary" href="/dashboard?term={{ term }}">Back</a>
+    </div>
+  </div>
+
+  <div class="grid" style="margin-top:12px">
+    <div class="card" style="margin:0">
+      <h3>Overall</h3>
+      {% if overall_label %}
+        <div><span class="badge">{{ overall_label }}</span> <span class="small">Score: {{ "%.2f"|format(overall_score) }}</span></div>
+      {% else %}
+        <div class="small">Incomplete</div>
+      {% endif %}
+    </div>
+    <div class="card" style="margin:0">
+      <h3>Pillars</h3>
+      <div class="small">Pillar 1 (60%): {{ p1 if p1 is not none else "—" }}</div>
+      <div class="small">Pillar 2 (20%): {{ p2 if p2 is not none else "—" }}</div>
+      <div class="small">Pillar 3 (20%): {{ p3 if p3 is not none else "—" }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Metrics</h3>
+  <p class="small">Enter an actual value then Save. Auto-score is calculated. Principal/Admin can override with reason.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:28%">Metric</th>
+        <th style="width:10%">Target</th>
+        <th style="width:12%">Actual</th>
+        <th style="width:10%">Auto</th>
+        <th style="width:10%">Override</th>
+        <th>Reason / Notes</th>
+        <th style="width:10%">Updated</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      {% if row.is_header %}
+        <tr><th colspan="7">{{ row.title }}</th></tr>
+      {% else %}
+      <tr>
+        <td><strong>{{ row.name }}</strong><div class="small">{{ row.desc }}</div></td>
+        <td class="small">{{ row.target_text }}</td>
+        <td>
+          <form method="post" action="/vp/{{ vp.id }}/metric/{{ row.id }}/actual">
+            <input type="hidden" name="term" value="{{ term }}">
+            <input type="number" step="0.01" name="actual" value="{{ row.actual if row.actual is not none else "" }}" placeholder="e.g., 85">
+            <div style="height:8px"></div>
+            <button class="btn secondary" type="submit">Save</button>
+          </form>
+        </td>
+        <td><span class="badge">{{ row.auto_score if row.auto_score is not none else "—" }}</span></td>
+        <td>
+          <form method="post" action="/vp/{{ vp.id }}/metric/{{ row.id }}/override">
+            <input type="hidden" name="term" value="{{ term }}">
+            <input type="number" min="1" max="4" name="override" value="{{ row.override_score if row.override_score is not none else "" }}" placeholder="1-4">
+            <div style="height:8px"></div>
+            <button class="btn secondary" type="submit">Set</button>
+          </form>
+        </td>
+        <td>
+          <form method="post" action="/vp/{{ vp.id }}/metric/{{ row.id }}/notes">
+            <input type="hidden" name="term" value="{{ term }}">
+            <textarea name="notes" placeholder="Evidence / notes">{{ row.notes or "" }}</textarea>
+            <div style="height:8px"></div>
+            <button class="btn secondary" type="submit">Save</button>
+          </form>
+          {% if row.override_score is not none %}
+            <div class="small"><strong>Override reason:</strong> {{ row.override_reason or "-" }}</div>
+          {% endif %}
+        </td>
+        <td class="small">{{ row.updated_at or "-" }}</td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

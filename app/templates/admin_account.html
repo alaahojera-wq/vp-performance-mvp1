@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Admin • Account</h2>
+  <p class="small">Change admin password (stored securely in the database).</p>
+  <form method="post" action="/admin/account">
+    <label class="small">New password</label>
+    <input type="password" name="password" minlength="8" required>
+    <div style="height:10px"></div>
+    <button class="btn" type="submit">Update password</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Edit VP • {{ vp.id }}</h2>
+  <form method="post" action="/admin/vps/edit/{{ vp.id }}">
+    <div class="grid">
+      <div>
+        <label class="small">Name</label>
+        <input name="name" value="{{ vp.name }}" required>
+      </div>
+      <div>
+        <label class="small">Email</label>
+        <input name="email" value="{{ vp.email or '' }}">
+      </div>
+      <div>
+        <label class="small">Phase</label>
+        <input name="phase" value="{{ vp.phase or '' }}">
+      </div>
+    </div>
+    <div style="height:10px"></div>
+    <label class="small">Notes</label>
+    <textarea name="notes">{{ vp.notes or "" }}</textarea>
+    <div style="height:10px"></div>
+    <button class="btn" type="submit">Save</button>
+    <a class="btn secondary" href="/admin/vps">Back</a>
+  </form>
+</div>
+{% endblock %}
