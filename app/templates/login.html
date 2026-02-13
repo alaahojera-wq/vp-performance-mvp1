@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:560px;margin:40px auto;">
+  <div class="row-actions" style="justify-content:center">
+    <img src="/static/logo.png" alt="Logo" style="height:72px;width:auto"/>
+  </div>
+  <h2 style="text-align:center;margin-top:10px">{{ brand_name }}</h2>
+  <p class="small" style="text-align:center">Secure VP performance evaluation with evidence collection and term-based dashboards.</p>
+  <form method="post" action="/login">
+    <label class="small">Email</label>
+    <input type="text" name="email" placeholder="name@school.ae" required>
+    <div style="height:10px"></div>
+    <label class="small">Password</label>
+    <input type="password" name="password" required>
+    <div style="height:14px"></div>
+    <button class="btn" type="submit" style="width:100%">Sign in</button>
+  </form>
+</div>
+{% endblock %}

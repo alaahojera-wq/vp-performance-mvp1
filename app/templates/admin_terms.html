@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Admin • Terms</h2>
+  <p class="small">Create terms, set the active term, and lock previous terms to prevent edits (Principal accounts).</p>
+</div>
+
+<div class="card">
+  <h3>Add Term</h3>
+  <form method="post" action="/admin/terms/add" class="row-actions">
+    <div style="flex:1">
+      <label class="small">Term name</label>
+      <input name="name" placeholder="2025-26 Term 2" required>
+    </div>
+    <div style="min-width:160px">
+      <label class="small">Make Active</label>
+      <select name="make_active">
+        <option value="no" selected>No</option>
+        <option value="yes">Yes</option>
+      </select>
+    </div>
+    <div style="align-self:end"><button class="btn" type="submit">Add</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Existing Terms</h3>
+  <table>
+    <thead><tr><th>Term</th><th>Status</th><th>Locked</th><th>Actions</th></tr></thead>
+    <tbody>
+      {% for t in terms %}
+      <tr>
+        <td><strong>{{ t.name }}</strong></td>
+        <td>{% if t.is_active %}<span class="badge">Active</span>{% else %}<span class="small">—</span>{% endif %}</td>
+        <td>{% if t.locked %}<span class="badge">Locked</span>{% else %}<span class="small">Open</span>{% endif %}</td>
+        <td class="row-actions">
+          {% if not t.is_active %}
+          <form method="post" action="/admin/terms/activate/{{ t.id }}"><button class="btn secondary" type="submit">Set Active</button></form>
+          {% endif %}
+          <form method="post" action="/admin/terms/toggle-lock/{{ t.id }}"><button class="btn secondary" type="submit">{{ "Unlock" if t.locked else "Lock" }}</button></form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

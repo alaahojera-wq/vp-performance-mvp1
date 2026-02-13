@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <div class="row-actions" style="justify-content:space-between">
+    <div>
+      <h2>{{ vp.name }}</h2>
+      <div class="small">Term: <strong>{{ term }}</strong> • <strong>{{ "Locked" if term_locked else "Open" }}</strong></div>
+      {% if vp.email or vp.phase %}
+        <div class="small">Info: {{ vp.phase or "-" }} • {{ vp.email or "-" }}</div>
+      {% endif %}
+      {% if vp.notes %}
+        <div class="small">Notes: {{ vp.notes }}</div>
+      {% endif %}
+    </div>
+    <div class="row-actions">
+      <form method="get" action="/vp/{{ vp.id }}" class="row-actions">
+        <label class="small">Term</label>
+        <select name="term" onchange="this.form.submit()">
+          {% for t in terms %}
+            <option value="{{ t.name }}" {% if t.name == term %}selected{% endif %}>
+              {{ t.name }}{% if t.is_active %} (Active){% endif %}{% if t.locked %} • Locked{% endif %}
+            </option>
+          {% endfor %}
+        </select>
+      </form>
+      <a class="btn secondary" href="/dashboard?term={{ term }}">Back</a>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Metrics</h3>
+  {% if (term_locked and user.role != "admin") %}
+    <div class="notice">This term is locked. Editing is disabled for Principal accounts.</div>
+  {% endif %}
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:28%">Metric</th>
+        <th style="width:10%">Target</th>
+        <th style="width:12%">Actual</th>
+        <th style="width:10%">Auto</th>
+        <th style="width:10%">Override</th>
+        <th>Evidence / Reason</th>
+        <th style="width:10%">Updated</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      {% if row.is_header %}
+        <tr><th colspan="7">{{ row.title }}</th></tr>
+      {% else %}
+      <tr>
+        <td><strong>{{ row.name }}</strong><div class="small">{{ row.desc }}</div></td>
+        <td class="small">{{ row.target_text }}</td>
+        <td>
+          <form method="post" action="/vp/{{ vp.id }}/metric/{{ row.id }}/actual">
+            <input type="hidden" name="term" value="{{ term }}">
+            <input type="number" step="0.01" name="actual" value="{{ row.actual if row.actual is not none else "" }}" {% if disable_edit %}disabled{% endif %}>
+            <div style="height:8px"></div>
+            <button class="btn secondary {% if disable_edit %}disabled{% endif %}" type="submit" {% if disable_edit %}disabled{% endif %}>Save</button>
+          </form>
+        </td>
+        <td><span class="badge">{{ row.auto_score if row.auto_score is not none else "—" }}</span></td>
+        <td>
+          <form method="post" action="/vp/{{ vp.id }}/metric/{{ row.id }}/override">
+            <input type="hidden" name="term" value="{{ term }}">
+            <input type="number" min="1" max="4" name="override" value="{{ row.override_score if row.override_score is not none else "" }}" {% if disable_edit %}disabled{% endif %}>
+            <div style="height:8px"></div>
+            <button class="btn secondary {% if disable_edit %}disabled{% endif %}" type="submit" {% if disable_edit %}disabled{% endif %}>Set</button>
+          </form>
+        </td>
+        <td>
+          <form method="post" action="/vp/{{ vp.id }}/metric/{{ row.id }}/notes">
+            <input type="hidden" name="term" value="{{ term }}">
+            <textarea name="notes" {% if disable_edit %}disabled{% endif %}>{{ row.notes or "" }}</textarea>
+            <div style="height:8px"></div>
+            <button class="btn secondary {% if disable_edit %}disabled{% endif %}" type="submit" {% if disable_edit %}disabled{% endif %}>Save</button>
+          </form>
+        </td>
+        <td class="small">{{ row.updated_at or "-" }}</td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
