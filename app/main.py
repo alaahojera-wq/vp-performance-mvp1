@@ -27,36 +27,43 @@ STATIC_DIR= os.path.join(APP_DIR,"static")
 class DB:
     def __init__(self):
         self.is_pg = bool(DATABASE_URL)
+        self.pool = None
+
         if self.is_pg:
             import psycopg2
+            from psycopg2.pool import SimpleConnectionPool
             self.pg = psycopg2
+            self.pool = SimpleConnectionPool(
+                minconn=1,
+                maxconn=int(os.getenv("PG_POOL_MAX", "5")),
+                dsn=DATABASE_URL,
+            )
 
     def connect(self):
         if self.is_pg:
-            return self.pg.connect(DATABASE_URL)
+            return self.pool.getconn()
+
         import sqlite3
-        data_dir = os.getenv("DATA_DIR",".")
+        data_dir = os.getenv("DATA_DIR", ".")
         os.makedirs(data_dir, exist_ok=True)
-        conn = sqlite3.connect(os.path.join(data_dir,"vp_perf.db"))
+        conn = sqlite3.connect(os.path.join(data_dir, "vp_perf.db"))
         conn.row_factory = sqlite3.Row
         return conn
 
-    def fetchone(self, sql:str, params:Tuple=()):
-        with self.connect() as conn:
-            cur = conn.cursor()
-            cur.execute(sql, params)
-            return cur.fetchone()
+    def release(self, conn):
+        if self.is_pg:
+            self.pool.putconn(conn)
+        else:
+            conn.close()
 
-    def fetchall(self, sql:str, params:Tuple=()):
-        with self.connect() as conn:
-            cur = conn.cursor()
-            cur.execute(sql, params)
-            return cur.fetchall()
+    @contextmanager
+    def session(self):
+        conn = self.connect()
+        try:
+            yield conn
+        finally:
+            self.release(conn)
 
-    def execute(self, sql:str, params:Tuple=()):
-        with self.connect() as conn:
-            cur = conn.cursor()
-            cur.execute(sql, params)
             conn.commit()
 
 db = DB()
