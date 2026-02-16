@@ -91,73 +91,52 @@ def _verify_password(password: str, stored: str) -> bool:
 
 # --------------- Schema init ---------------
 def init_db():
-    if db.is_pg:
-        db.execute("""CREATE TABLE IF NOT EXISTS users(
-            email TEXT PRIMARY KEY, role TEXT NOT NULL, password_hash TEXT NOT NULL
-        );""")
-        db.execute("""CREATE TABLE IF NOT EXISTS vps(
-            id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT, phase TEXT, notes TEXT
-        );""")
-        db.execute("""CREATE TABLE IF NOT EXISTS terms(
-            id SERIAL PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+    with db.session() as conn:
+        cur = conn.cursor()
+
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            email TEXT PRIMARY KEY,
+            role TEXT NOT NULL,
+            password_hash TEXT NOT NULL
+        )
+        """)
+
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS vps (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            email TEXT,
+            phase TEXT,
+            notes TEXT
+        )
+        """)
+
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS terms (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
             is_active BOOLEAN NOT NULL DEFAULT FALSE,
             locked BOOLEAN NOT NULL DEFAULT FALSE
-        );""")
-        db.execute("""CREATE TABLE IF NOT EXISTS metric_values(
-            term TEXT NOT NULL, vp_id TEXT NOT NULL, metric_id TEXT NOT NULL,
-            actual DOUBLE PRECISION, auto_score INTEGER, override_score INTEGER,
-            override_reason TEXT, notes TEXT, updated_at TEXT,
-            PRIMARY KEY(term,vp_id,metric_id)
-        );""")
-    else:
-        db.execute("""CREATE TABLE IF NOT EXISTS users(
-            email TEXT PRIMARY KEY, role TEXT NOT NULL, password_hash TEXT NOT NULL
-        );""")
-        db.execute("""CREATE TABLE IF NOT EXISTS vps(
-            id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT, phase TEXT, notes TEXT
-        );""")
-        db.execute("""CREATE TABLE IF NOT EXISTS terms(
-            id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE,
-            is_active INTEGER NOT NULL DEFAULT 0,
-            locked INTEGER NOT NULL DEFAULT 0
-        );""")
-        db.execute("""CREATE TABLE IF NOT EXISTS metric_values(
-            term TEXT NOT NULL, vp_id TEXT NOT NULL, metric_id TEXT NOT NULL,
-            actual REAL, auto_score INTEGER, override_score INTEGER,
-            override_reason TEXT, notes TEXT, updated_at TEXT,
-            PRIMARY KEY(term,vp_id,metric_id)
-        );""")
+        )
+        """)
 
-    # seed users
-    q = "SELECT COUNT(1) FROM users WHERE email=%s" if db.is_pg else "SELECT COUNT(1) FROM users WHERE email=?"
-    c = db.fetchone(q,(ADMIN_EMAIL,))[0]
-    if c == 0:
-        ins = "INSERT INTO users(email,role,password_hash) VALUES(%s,%s,%s)" if db.is_pg else "INSERT INTO users(email,role,password_hash) VALUES(?,?,?)"
-        db.execute(ins,(ADMIN_EMAIL,"admin",_make_password(ADMIN_PASSWORD)))
-    c = db.fetchone(q,(PRINCIPAL_EMAIL,))[0]
-    if c == 0:
-        ins = "INSERT INTO users(email,role,password_hash) VALUES(%s,%s,%s)" if db.is_pg else "INSERT INTO users(email,role,password_hash) VALUES(?,?,?)"
-        db.execute(ins,(PRINCIPAL_EMAIL,"principal",_make_password(PRINCIPAL_PASSWORD)))
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS metric_values (
+            term TEXT NOT NULL,
+            vp_id TEXT NOT NULL,
+            metric_id TEXT NOT NULL,
+            actual DOUBLE PRECISION,
+            auto_score INTEGER,
+            override_score INTEGER,
+            override_reason TEXT,
+            notes TEXT,
+            updated_at TEXT,
+            PRIMARY KEY (term, vp_id, metric_id)
+        )
+        """)
 
-    # seed vp
-    c = db.fetchone("SELECT COUNT(1) FROM vps")[0]
-    if c == 0:
-        ins = "INSERT INTO vps(id,name,email,phase,notes) VALUES(%s,%s,%s,%s,%s)" if db.is_pg else "INSERT INTO vps(id,name,email,phase,notes) VALUES(?,?,?,?,?)"
-        db.execute(ins,("demo_vp","Demo VP","","",""))
-
-    # seed term
-    c = db.fetchone("SELECT COUNT(1) FROM terms")[0]
-    if c == 0:
-        ins = "INSERT INTO terms(name,is_active,locked) VALUES(%s,TRUE,FALSE)" if db.is_pg else "INSERT INTO terms(name,is_active,locked) VALUES(?,1,0)"
-        db.execute(ins,(DEFAULT_TERM,))
-    else:
-        active = db.fetchone("SELECT COUNT(1) FROM terms WHERE is_active=" + ("TRUE" if db.is_pg else "1"))[0]
-        if active == 0:
-            # activate first
-            row = db.fetchone("SELECT id FROM terms ORDER BY id ASC LIMIT 1")
-            if row:
-                db.execute("UPDATE terms SET is_active=" + ("FALSE" if db.is_pg else "0"))
-                db.execute("UPDATE terms SET is_active=" + ("TRUE" if db.is_pg else "1") + " WHERE id=" + ("%s" if db.is_pg else "?"), (row[0],))
+        conn.commit()
 
 init_db()
 
