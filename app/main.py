@@ -18,7 +18,7 @@ PRINCIPAL_PASSWORD = os.getenv("PRINCIPAL_PASSWORD","principal123")
 
 SESSION_SECRET = os.getenv("SESSION_SECRET", secrets.token_hex(16))
 DEFAULT_TERM   = os.getenv("DEFAULT_TERM","2025-26 Term 1")
-
+from contextlib import contextmanager
 APP_DIR   = os.path.dirname(__file__)
 TEMPL_DIR = os.path.join(APP_DIR,"templates")
 STATIC_DIR= os.path.join(APP_DIR,"static")
