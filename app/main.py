@@ -122,16 +122,20 @@ def _verify_password(password: str, stored: str) -> bool:
 
 # --------------- Schema init ---------------
 def init_db():
-    # Create tables
-    db.execute("""
+    with db.session() as conn:
+        cur = conn.cursor()
+
+        # --- Users ---
+        cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             email TEXT PRIMARY KEY,
             role TEXT NOT NULL,
             password_hash TEXT NOT NULL
         )
-    """)
+        """)
 
-    db.execute("""
+        # --- VPs ---
+        cur.execute("""
         CREATE TABLE IF NOT EXISTS vps (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
@@ -139,18 +143,20 @@ def init_db():
             phase TEXT,
             notes TEXT
         )
-    """)
+        """)
 
-    db.execute("""
+        # --- Terms ---
+        cur.execute("""
         CREATE TABLE IF NOT EXISTS terms (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY,
             name TEXT NOT NULL UNIQUE,
             is_active BOOLEAN NOT NULL DEFAULT FALSE,
             locked BOOLEAN NOT NULL DEFAULT FALSE
         )
-    """)
+        """)
 
-    db.execute("""
+        # --- Metric Values ---
+        cur.execute("""
         CREATE TABLE IF NOT EXISTS metric_values (
             term TEXT NOT NULL,
             vp_id TEXT NOT NULL,
@@ -163,45 +169,24 @@ def init_db():
             updated_at TEXT,
             PRIMARY KEY (term, vp_id, metric_id)
         )
-    """)
+        """)
 
-    # Seed users (admin + principal) if missing
-    admin_hash = admin_hash = _make_password(ADMIN_PASSWORD)
-(ADMIN_PASSWORD)
-    principal_hash = admin_hash = _make_password(ADMIN_PASSWORD)
-(PRINCIPAL_PASSWORD)
+        # --- Create admin user if not exists ---
+        principal_hash = _make_password(PRINCIPAL_PASSWORD)
+        admin_hash = _make_password(ADMIN_PASSWORD)
 
-    if db.is_pg:
-        db.execute(
-            "INSERT INTO users(email, role, password_hash) VALUES (%s,%s,%s) ON CONFLICT (email) DO NOTHING",
-            (ADMIN_EMAIL, "admin", admin_hash),
-        )
-        db.execute(
-            "INSERT INTO users(email, role, password_hash) VALUES (%s,%s,%s) ON CONFLICT (email) DO NOTHING",
+        cur.execute(
+            "INSERT INTO users (email, role, password_hash) VALUES (%s,%s,%s) ON CONFLICT (email) DO NOTHING",
             (PRINCIPAL_EMAIL, "principal", principal_hash),
         )
-        # Ensure a default term exists and is active
-        db.execute(
-            "INSERT INTO terms(name, is_active, locked) VALUES (%s, TRUE, FALSE) ON CONFLICT (name) DO NOTHING",
-            (DEFAULT_TERM,),
-        )
-        db.execute("UPDATE terms SET is_active = (name = %s)", (DEFAULT_TERM,))
-    else:
-        db.execute(
-            "INSERT OR IGNORE INTO users(email, role, password_hash) VALUES (?,?,?)",
+
+        cur.execute(
+            "INSERT INTO users (email, role, password_hash) VALUES (%s,%s,%s) ON CONFLICT (email) DO NOTHING",
             (ADMIN_EMAIL, "admin", admin_hash),
         )
-        db.execute(
-            "INSERT OR IGNORE INTO users(email, role, password_hash) VALUES (?,?,?)",
-            (PRINCIPAL_EMAIL, "principal", principal_hash),
-        )
-        db.execute(
-            "INSERT OR IGNORE INTO terms(name, is_active, locked) VALUES (?,?,?)",
-            (DEFAULT_TERM, 1, 0),
-        )
-        db.execute("UPDATE terms SET is_active = CASE WHEN name=? THEN 1 ELSE 0 END", (DEFAULT_TERM,))
 
-init_db()
+        conn.commit()
+
 
 
 
