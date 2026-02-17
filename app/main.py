@@ -36,9 +36,9 @@ class DB:
         self.is_pg = bool(DATABASE_URL)
         self.pool = None
         if self.is_pg:
-            import psycop
-            from psycop.pool import SimpleConnectionPool
-            self.pg = psycop
+            import psycopg
+            from psycopg.pool import SimpleConnectionPool
+            self.pg = psycopg
             self.pool = SimpleConnectionPool(
                 minconn=1,
                 maxconn=int(os.getenv("PG_POOL_MAX", "5")),
