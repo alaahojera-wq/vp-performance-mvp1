@@ -42,7 +42,7 @@ class DB:
             self.pool = pool.SimpleConnectionPool(
                 1,
                 int(os.getenv("PG_POOL_MAX", "5")),
-                DATABASE_URL
+                DATABASE_URL,
             )
 
     def connect(self):
@@ -51,7 +51,9 @@ class DB:
         import sqlite3
         data_dir = os.getenv("DATA_DIR", ".")
         os.makedirs(data_dir, exist_ok=True)
-        conn = sqlite3.connect(os.path.join(data_dir, "vp_perf.db"))
+        conn = sqlite3.connect(
+            os.path.join(data_dir, "vp_perf.db")
+        )
         conn.row_factory = sqlite3.Row
         return conn
 
