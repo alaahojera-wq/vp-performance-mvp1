@@ -294,9 +294,14 @@ def init_db():
 # ----------------------
 
 ## LOGIN
-@app.get("/login", response_class=HTMLResponse)
-def login_get(request: Request):
-    return render(request,"login.html",title="Login")
+@app.get("/", response_class=HTMLResponse)
+def root(request: Request):
+    # Redirect to dashboard if logged in, otherwise to login
+    user = get_current_user(request)
+    if user:
+        return RedirectResponse("/dashboard")
+    return RedirectResponse("/login")
+
 
 @app.post("/login")
 def login_post(request: Request, email: str = Form(...), password: str = Form(...)):
