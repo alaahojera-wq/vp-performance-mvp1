@@ -349,6 +349,139 @@ def term_locked(term):
             cur.execute("SELECT locked FROM terms WHERE name=?", (term,))
         r = cur.fetchone()
         return bool(r[0]) if r else False
+# -----------------
+# Data Helpers
+# -----------------
+
+def load_values(term: str, vp_id: str) -> Dict[str, Tuple]:
+    """
+    Load values from metric_values for the given term and vp_id
+    """
+    if db.is_pg:
+        q = """SELECT metric_id, actual, auto_score, override_score, override_reason, notes, updated_at
+               FROM metric_values WHERE term=%s AND vp_id=%s"""
+    else:
+        q = """SELECT metric_id, actual, auto_score, override_score, override_reason, notes, updated_at
+               FROM metric_values WHERE term=? AND vp_id=?"""
+    rows = db.fetchall(q, (term, vp_id))
+    return {r[0]: r for r in rows}
+
+def upsert(
+    term: str,
+    vp_id: str,
+    metric_id: str,
+    actual=None,
+    auto_score=None,
+    override_score=None,
+    override_reason=None,
+    notes=None,
+):
+    """
+    Insert or update a metric values row
+    """
+    updated = datetime.utcnow().isoformat()
+
+    if db.is_pg:
+        sql = """
+            INSERT INTO metric_values(term,vp_id,metric_id,actual,auto_score,override_score,override_reason,notes,updated_at)
+            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT(term,vp_id,metric_id) DO UPDATE SET
+                actual=EXCLUDED.actual,
+                auto_score=EXCLUDED.auto_score,
+                override_score=EXCLUDED.override_score,
+                override_reason=EXCLUDED.override_reason,
+                notes=EXCLUDED.notes,
+                updated_at=EXCLUDED.updated_at
+        """
+        db.execute(
+            sql,
+            (
+                term,
+                vp_id,
+                metric_id,
+                actual,
+                auto_score,
+                override_score,
+                override_reason,
+                notes,
+                updated,
+            ),
+        )
+    else:
+        # SQLite
+        db.execute(
+            "INSERT OR IGNORE INTO metric_values(term,vp_id,metric_id,updated_at) VALUES(?,?,?,?)",
+            (term, vp_id, metric_id, updated),
+        )
+        db.execute(
+            """UPDATE metric_values SET actual=?, auto_score=?, override_score=?, override_reason=?, notes=?, updated_at=?
+               WHERE term=? AND vp_id=? AND metric_id=?""",
+            (actual, auto_score, override_score, override_reason, notes, updated, term, vp_id, metric_id),
+        )
+
+def compute_auto(m: Metric, actual: Optional[float]) -> Optional[int]:
+    """
+    Compute automatic score based on metric definition and actual value
+    """
+    if actual is None:
+        return None
+    if m.id == "p3_turnover":
+        if actual <= 15:
+            return 4
+        if actual <= 25:
+            return 3
+        if actual <= 35:
+            return 2
+        return 1
+
+    if m.target_type == "gte":
+        if actual >= m.target_value + 10:
+            return 4
+        if actual >= m.target_value:
+            return 3
+        if actual >= m.target_value - 10:
+            return 2
+        return 1
+
+    if m.target_type == "lte":
+        if actual <= m.target_value - 10:
+            return 4
+        if actual <= m.target_value:
+            return 3
+        if actual <= m.target_value + 10:
+            return 2
+        return 1
+    return None
+
+def overall(term: str, vp_id: str) -> Dict[str, Any]:
+    """
+    Compute overall scores for pillars
+    """
+    vals = load_values(term, vp_id)
+    p_scores = {1: [], 2: [], 3: []}
+
+    for m in METRICS:
+        row = vals.get(m.id)
+        if not row:
+            continue
+        score = row[3] if row[3] is not None else row[2]
+        if score is not None:
+            p_scores[m.pillar].append(int(score))
+
+    # average for each pillar
+    p_avg = {}
+    for p in (1, 2, 3):
+        if p_scores[p]:
+            avg = sum(p_scores[p]) / len(p_scores[p])
+            p_avg[p] = avg
+        else:
+            p_avg[p] = None
+
+    if all(p_avg[p] is not None for p in (1, 2, 3)):
+        total = sum(p_avg[p] * PILLAR_WEIGHTS[p] for p in (1, 2, 3))
+        lbl = label(total)
+        return {"overall_score": total, "overall_label": lbl}
+    return {"overall_score": None, "overall_label": None}
 
 # ----------------------
 # Routes
@@ -408,6 +541,139 @@ def dashboard(request: Request, term:Optional[str]=None):
     for r in rows:
         vps.append({"id":r[0],"name":r[1],"email":r[2],"phase":r[3],"notes":r[4]})
     return render(request,"dashboard.html",title="Dashboard",term=selected,terms=terms,vps=vps,term_locked=locked)
+# -----------------
+# Data Helpers
+# -----------------
+
+def load_values(term: str, vp_id: str) -> Dict[str, Tuple]:
+    """
+    Load values from metric_values for the given term and vp_id
+    """
+    if db.is_pg:
+        q = """SELECT metric_id, actual, auto_score, override_score, override_reason, notes, updated_at
+               FROM metric_values WHERE term=%s AND vp_id=%s"""
+    else:
+        q = """SELECT metric_id, actual, auto_score, override_score, override_reason, notes, updated_at
+               FROM metric_values WHERE term=? AND vp_id=?"""
+    rows = db.fetchall(q, (term, vp_id))
+    return {r[0]: r for r in rows}
+
+def upsert(
+    term: str,
+    vp_id: str,
+    metric_id: str,
+    actual=None,
+    auto_score=None,
+    override_score=None,
+    override_reason=None,
+    notes=None,
+):
+    """
+    Insert or update a metric values row
+    """
+    updated = datetime.utcnow().isoformat()
+
+    if db.is_pg:
+        sql = """
+            INSERT INTO metric_values(term,vp_id,metric_id,actual,auto_score,override_score,override_reason,notes,updated_at)
+            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT(term,vp_id,metric_id) DO UPDATE SET
+                actual=EXCLUDED.actual,
+                auto_score=EXCLUDED.auto_score,
+                override_score=EXCLUDED.override_score,
+                override_reason=EXCLUDED.override_reason,
+                notes=EXCLUDED.notes,
+                updated_at=EXCLUDED.updated_at
+        """
+        db.execute(
+            sql,
+            (
+                term,
+                vp_id,
+                metric_id,
+                actual,
+                auto_score,
+                override_score,
+                override_reason,
+                notes,
+                updated,
+            ),
+        )
+    else:
+        # SQLite
+        db.execute(
+            "INSERT OR IGNORE INTO metric_values(term,vp_id,metric_id,updated_at) VALUES(?,?,?,?)",
+            (term, vp_id, metric_id, updated),
+        )
+        db.execute(
+            """UPDATE metric_values SET actual=?, auto_score=?, override_score=?, override_reason=?, notes=?, updated_at=?
+               WHERE term=? AND vp_id=? AND metric_id=?""",
+            (actual, auto_score, override_score, override_reason, notes, updated, term, vp_id, metric_id),
+        )
+
+def compute_auto(m: Metric, actual: Optional[float]) -> Optional[int]:
+    """
+    Compute automatic score based on metric definition and actual value
+    """
+    if actual is None:
+        return None
+    if m.id == "p3_turnover":
+        if actual <= 15:
+            return 4
+        if actual <= 25:
+            return 3
+        if actual <= 35:
+            return 2
+        return 1
+
+    if m.target_type == "gte":
+        if actual >= m.target_value + 10:
+            return 4
+        if actual >= m.target_value:
+            return 3
+        if actual >= m.target_value - 10:
+            return 2
+        return 1
+
+    if m.target_type == "lte":
+        if actual <= m.target_value - 10:
+            return 4
+        if actual <= m.target_value:
+            return 3
+        if actual <= m.target_value + 10:
+            return 2
+        return 1
+    return None
+
+def overall(term: str, vp_id: str) -> Dict[str, Any]:
+    """
+    Compute overall scores for pillars
+    """
+    vals = load_values(term, vp_id)
+    p_scores = {1: [], 2: [], 3: []}
+
+    for m in METRICS:
+        row = vals.get(m.id)
+        if not row:
+            continue
+        score = row[3] if row[3] is not None else row[2]
+        if score is not None:
+            p_scores[m.pillar].append(int(score))
+
+    # average for each pillar
+    p_avg = {}
+    for p in (1, 2, 3):
+        if p_scores[p]:
+            avg = sum(p_scores[p]) / len(p_scores[p])
+            p_avg[p] = avg
+        else:
+            p_avg[p] = None
+
+    if all(p_avg[p] is not None for p in (1, 2, 3)):
+        total = sum(p_avg[p] * PILLAR_WEIGHTS[p] for p in (1, 2, 3))
+        lbl = label(total)
+        return {"overall_score": total, "overall_label": lbl}
+    return {"overall_score": None, "overall_label": None}
 
 # ------ VP Details ------
 @app.get("/vp/{vp_id}", response_class=HTMLResponse)
