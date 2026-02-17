@@ -313,27 +313,28 @@ def login_get(request:Request):
     return render(request,"login.html",title="Login")
 
 @app.post("/login")
-def login_post(request: Request, email:str=Form(...), password:str=Form(...)):
+def login_post(request: Request, email: str = Form(...), password: str = Form(...)):
     e = email.strip().lower()
     with db.session() as conn:
         cur = conn.cursor()
         if db.is_pg:
-            cur.execute("SELECT email, role, password_hash FROM users WHERE email=%s",(e,))
+            cur.execute("SELECT email, role, password_hash FROM users WHERE email=%s", (e,))
         else:
-            cur.execute("SELECT email, role, password_hash FROM users WHERE email=?",(e,))
+            cur.execute("SELECT email, role, password_hash FROM users WHERE email=?", (e,))
         r = cur.fetchone()
+
     if not r or not _verify_password(password, r[2]):
         return set_flash(RedirectResponse("/login"), "Invalid email or password.")
+
+    # Create JWT token
     token = create_jwt_token(r[0])
-    resp = RedirectResponse("/dashboard")
-    resp.set_cookie("jwt_token", token, httponly=True)
+
+    # Set cookie
+    resp = RedirectResponse("/dashboard", status_code=303)
+    resp.delete_cookie("jwt_token")
+    resp.set_cookie("jwt_token", token, httponly=True, samesite="lax")
     return resp
 
-@app.get("/logout")
-def logout():
-    resp = RedirectResponse("/login")
-    resp.delete_cookie("jwt_token")
-    return resp
 
 # ------ Dashboard ------
 @app.get("/dashboard", response_class=HTMLResponse)
