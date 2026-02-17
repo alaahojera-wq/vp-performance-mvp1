@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Take Exam: {{ exam[1] }}</h2>
+  <p class="small">{{ exam[2] }}</p>
+</div>
+
+<div class="card">
+  <form method="post" action="/exam/{{ exam[0] }}/submit">
+    {% for q in questions %}
+      <div class="card">
+        <p><strong>Q{{ q[0] }}:</strong> {{ q[1] }}</p>
+
+        {% if q[2] == "mcq" %}
+          {% set opts = q[3] | loads %}
+          {% for key, text in opts.items() %}
+            <div>
+              <label><input type="radio" name="{{ q[0] }}" value="{{ key }}"> {{ text }}</label>
+            </div>
+          {% endfor %}
+        {% else %}
+          <textarea name="{{ q[0] }}"></textarea>
+        {% endif %}
+      </div>
+    {% endfor %}
+
+    <button class="btn" type="submit">Submit Exam</button>
+  </form>
+</div>
+{% endblock %}
