@@ -10,6 +10,39 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from contextlib import contextmanager
 
 import jwt
+import sqlite3
+from pathlib import Path
+
+DB_PATH = Path(os.getenv("SQLITE_PATH", "data/app.db"))
+
+def get_conn():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        role TEXT NOT NULL DEFAULT 'user',
+        password_hash TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    conn.commit()
+
+    # optional debug: list tables once
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    print("SQLite DB:", DB_PATH.resolve())
+    print("Tables:", [r[0] for r in cur.fetchall()])
+
+    conn.close()
 
 # ----------------------
 # Metric & Scoring
