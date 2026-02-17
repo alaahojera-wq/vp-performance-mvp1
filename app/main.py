@@ -110,14 +110,26 @@ def get_token_from_request(request: Request) -> Optional[str]:
 
 def create_jwt_token(email: str):
     expire = datetime.utcnow() + timedelta(minutes=JWT_EXPIRE_MINUTES)
-    to_encode = {"sub": email, "exp": expire.isoformat()}
-    return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    payload = {"sub": email, "exp": int(expire.timestamp())}
+    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+
 
 def decode_jwt(token: str):
     try:
-        return jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-    except Exception:
+        data = jwt.decode(
+            token,
+            JWT_SECRET_KEY,
+            algorithms=[JWT_ALGORITHM],
+            options={"verify_exp": True},
+        )
+        return data
+    except jwt.ExpiredSignatureError:
+        # Token expired
         return None
+    except jwt.InvalidTokenError:
+        # Token invalid
+        return None
+
 
 def get_current_user(request: Request):
     token = get_token_from_request(request)
