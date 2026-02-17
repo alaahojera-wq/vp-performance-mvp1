@@ -563,7 +563,8 @@ def admin_vps_add(
         return set_flash(RedirectResponse("/admin/vps", status_code=303), "VP ID exists or invalid.")
 
 @app.post("/admin/vps/delete/{vp_id}")
-def admin_vps_delete(request: Request, vp_id: str, user=Depends(require_role("admin")):
+def admin_vps_delete(request: Request, vp_id: str, user=Depends(require_role("admin"))):
+
     db.execute("DELETE FROM vps WHERE id=%s", (vp_id,))
     return set_flash(RedirectResponse("/admin/vps", status_code=303), "VP deleted.")
 
