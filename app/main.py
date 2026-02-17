@@ -466,6 +466,7 @@ def vp_detail(request: Request, vp_id: str, term: Optional[str] = None):
         return RedirectResponse("/login")
 
     selected = term or get_active_term()
+    terms = get_terms()
     locked = term_locked(selected)
     disable_edit = locked and user["role"] != "admin"
 
