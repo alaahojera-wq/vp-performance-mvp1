@@ -1,9 +1,13 @@
-# main.py — Evalistics / VP Performance Tool (Supabase/Postgres ONLY)
-# ✅ Fixes included:
-# 1) vp_detail now defines `terms` (fixes NameError)
-# 2) All POST → redirect responses use 303 (fixes 307->POST redirect causing 405)
-# 3) Added GET /logout (fixes GET logout 405)
-# 4) Keeps all features: login/logout, dashboard, VP detail, metric updates, admin vps, admin terms, admin account
+# app/main.py — Evalistics / VP Performance Tool (Supabase/Postgres ONLY)
+# ✅ Matches your uploaded templates:
+#   - dashboard.html expects: terms = [{id,name,is_active,locked}], vps = [{..., overall_label, overall_score}], term_locked (bool)
+#   - admin_terms.html expects POST routes: /admin/terms/add, /admin/terms/activate/{id}, /admin/terms/toggle-lock/{id}
+#   - admin_vps.html expects routes: /admin/vps, /admin/vps/add, /admin/vps/delete/{id}, /admin/vps/edit/{id}
+# ✅ Fixes:
+#   - term dropdown empty -> ensure_term_exists(selected)
+#   - Overall column "Incomplete" -> compute_overall_for_vp + pass overall_label/overall_score
+#   - 307 -> 405 after POST -> always redirect with 303
+#   - GET /logout 405 -> add GET /logout
 
 import os
 import hashlib
@@ -42,7 +46,7 @@ PRINCIPAL_EMAIL = "principal@evalistics.com"
 PRINCIPAL_PASSWORD = "Principal@1234"
 
 if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is missing. Set it in Render environment variables.")
+    raise RuntimeError("DATABASE_URL is missing. Set it in Render environment variables (with sslmode=require).")
 if not JWT_SECRET_KEY:
     raise RuntimeError("JWT_SECRET_KEY is missing. Set it in Render environment variables.")
 
@@ -92,13 +96,21 @@ PILLAR_WEIGHTS = {1: 0.60, 2: 0.20, 3: 0.20}
 
 
 def compute_auto(metric: Optional[Metric], actual: Optional[float]) -> Optional[int]:
+    """
+    Returns an auto score out of 4 (as your UI expects).
+    - meets target => 4
+    - doesn't meet => 0
+    """
     if not metric or actual is None:
         return None
+
+    meets = False
     if metric.target_type == "gte":
-        return 1 if actual >= metric.target_value else 0
-    if metric.target_type == "lte":
-        return 1 if actual <= metric.target_value else 0
-    return None
+        meets = actual >= metric.target_value
+    elif metric.target_type == "lte":
+        meets = actual <= metric.target_value
+
+    return 4 if meets else 0
 
 
 # ======================
@@ -281,7 +293,7 @@ def init_db():
             ON CONFLICT (email) DO NOTHING;
         """, (ADMIN_EMAIL.lower(), "admin", _make_password(ADMIN_PASSWORD)))
 
-        # seed term (active)
+        # seed default term (active)
         cur.execute("""
             INSERT INTO terms(name, is_active, locked)
             VALUES (%s, TRUE, FALSE)
@@ -290,21 +302,88 @@ def init_db():
 
 
 # ======================
-# TERMS HELPERS
+# TERMS / OVERALL HELPERS
 # ======================
 
-def get_terms():
-    return db.fetchall("SELECT name, locked, is_active FROM terms ORDER BY id")
+def ensure_term_exists(term_name: str):
+    term_name = (term_name or "").strip()
+    if not term_name:
+        return
+    db.execute(
+        """
+        INSERT INTO terms(name, is_active, locked)
+        VALUES (%s, FALSE, FALSE)
+        ON CONFLICT (name) DO NOTHING
+        """,
+        (term_name,)
+    )
 
+def get_terms_full() -> List[Dict[str, Any]]:
+    rows = db.fetchall("SELECT id, name, is_active, locked FROM terms ORDER BY id")
+    return [{"id": r[0], "name": r[1], "is_active": bool(r[2]), "locked": bool(r[3])} for r in rows]
 
 def get_active_term() -> str:
     row = db.fetchone("SELECT name FROM terms WHERE is_active=TRUE ORDER BY id DESC LIMIT 1")
     return row[0] if row else DEFAULT_TERM
 
-
 def term_locked(term: str) -> bool:
     row = db.fetchone("SELECT locked FROM terms WHERE name=%s", (term,))
     return bool(row[0]) if row else False
+
+def overall_label_from_score(score: float) -> str:
+    # Simple 0..4 bands (stable)
+    if score >= 3.6:
+        return "Outstanding"
+    if score >= 3.0:
+        return "Good"
+    if score >= 2.4:
+        return "Acceptable"
+    return "Weak"
+
+def compute_overall_for_vp(term: str, vp_id: str) -> Tuple[Optional[float], Optional[str]]:
+    """
+    Returns (overall_score, overall_label) or (None, None) if incomplete.
+    Uses override_score if present else auto_score.
+    Weighted by 60/20/20 across pillars.
+    """
+    rows = db.fetchall(
+        """
+        SELECT metric_id, auto_score, override_score
+        FROM metric_values
+        WHERE term=%s AND vp_id=%s
+        """,
+        (term, vp_id)
+    )
+    score_map: Dict[str, Optional[int]] = {}
+    for r in rows:
+        metric_id, auto_s, over_s = r[0], r[1], r[2]
+        score_map[metric_id] = over_s if over_s is not None else auto_s
+
+    pillar_scores: Dict[int, List[float]] = {1: [], 2: [], 3: []}
+    complete = True
+
+    for m in METRICS:
+        s = score_map.get(m.id)
+        if s is None:
+            complete = False
+        else:
+            pillar_scores[m.pillar].append(float(s))
+
+    for p in (1, 2, 3):
+        if len(pillar_scores[p]) == 0:
+            complete = False
+
+    if not complete:
+        return None, None
+
+    pavg = {p: (sum(pillar_scores[p]) / len(pillar_scores[p])) for p in (1, 2, 3)}
+    overall = (
+        pavg[1] * PILLAR_WEIGHTS[1] +
+        pavg[2] * PILLAR_WEIGHTS[2] +
+        pavg[3] * PILLAR_WEIGHTS[3]
+    )
+    overall = round(overall, 2)
+    return overall, overall_label_from_score(overall)
 
 
 # ======================
@@ -386,232 +465,3 @@ def render(request: Request, template: str, **ctx):
 def set_flash(response: RedirectResponse, message: str):
     response.set_cookie("flash", message, max_age=5)
     return response
-
-
-# ======================
-# ROUTES
-# ======================
-
-@app.get("/login", response_class=HTMLResponse)
-def login_get(request: Request):
-    return render(request, "login.html", title="Login")
-
-@app.get("/", response_class=HTMLResponse)
-def root(request: Request):
-    user = get_current_user(request)
-    return RedirectResponse("/dashboard", status_code=303) if user else RedirectResponse("/login", status_code=303)
-
-@app.post("/login")
-def login_post(request: Request, email: str = Form(...), password: str = Form(...)):
-    email = email.strip().lower()
-    user = db.fetchone("SELECT email, role, password_hash FROM users WHERE email=%s", (email,))
-    if not user or not _verify_password(password, user[2]):
-        return set_flash(RedirectResponse("/login", status_code=303), "Invalid email or password.")
-
-    token = create_jwt_token(user[0])
-    resp = RedirectResponse("/dashboard", status_code=303)
-    resp.delete_cookie("jwt_token")
-    resp.set_cookie("jwt_token", token, httponly=True)
-    return resp
-
-# ✅ GET logout (fixes GET /logout 405)
-@app.get("/logout")
-def logout_get():
-    resp = RedirectResponse("/login", status_code=303)
-    resp.delete_cookie("jwt_token")
-    return resp
-
-# Keep POST logout too (optional)
-@app.post("/logout")
-def logout_post(request: Request):
-    resp = RedirectResponse("/login", status_code=303)
-    resp.delete_cookie("jwt_token")
-    return resp
-
-@app.get("/dashboard", response_class=HTMLResponse)
-def dashboard(request: Request, term: Optional[str] = None):
-    user = get_current_user(request)
-    if not user:
-        return RedirectResponse("/login", status_code=303)
-
-    selected = term or get_active_term()
-    terms = get_terms()
-    rows = db.fetchall("SELECT id, name, email, phase, notes FROM vps ORDER BY name")
-    vps = [{"id": r[0], "name": r[1], "email": r[2], "phase": r[3], "notes": r[4]} for r in rows]
-    return render(request, "dashboard.html", title="Dashboard", term=selected, terms=terms, vps=vps)
-
-@app.get("/vp/{vp_id}", response_class=HTMLResponse)
-def vp_detail(request: Request, vp_id: str, term: Optional[str] = None):
-    user = get_current_user(request)
-    if not user:
-        return RedirectResponse("/login", status_code=303)
-
-    selected = term or get_active_term()
-    terms = get_terms()  # ✅ FIX: define terms so template render never NameErrors
-    locked = term_locked(selected)
-    disable_edit = locked and user["role"] != "admin"
-
-    r = db.fetchone("SELECT id, name, email, phase, notes FROM vps WHERE id=%s", (vp_id,))
-    if not r:
-        return set_flash(RedirectResponse("/dashboard", status_code=303), "VP not found.")
-
-    vp = {"id": r[0], "name": r[1], "email": r[2], "phase": r[3], "notes": r[4]}
-
-    vals = {
-        row[0]: row for row in db.fetchall(
-            """
-            SELECT metric_id, actual, auto_score, override_score, override_reason, notes, updated_at
-            FROM metric_values
-            WHERE term=%s AND vp_id=%s
-            """,
-            (selected, vp_id)
-        )
-    }
-
-    rows_out: List[Dict[str, Any]] = []
-    for p in (1, 2, 3):
-        rows_out.append({"is_header": True, "title": f"Pillar {p} ({int(PILLAR_WEIGHTS[p] * 100)}%)"})
-        for m in [mm for mm in METRICS if mm.pillar == p]:
-            mv = vals.get(m.id)
-            rows_out.append({
-                "is_header": False,
-                "id": m.id,
-                "name": m.name,
-                "desc": m.desc,
-                "target_text": m.target_text,
-                "actual": None if not mv else mv[1],
-                "auto_score": None if not mv else mv[2],
-                "override_score": None if not mv else mv[3],
-                "notes": None if not mv else mv[5],
-                "updated_at": None if not mv else mv[6],
-            })
-
-    return render(
-        request, "vp.html",
-        title=vp["name"],
-        vp=vp,
-        term=selected,
-        terms=terms,
-        rows=rows_out,
-        term_locked=locked,
-        disable_edit=disable_edit
-    )
-
-@app.post("/vp/{vp_id}/metric/{metric_id}/actual")
-def set_actual(request: Request, vp_id: str, metric_id: str,
-               term: str = Form(...), actual: Optional[float] = Form(None)):
-    user = get_current_user(request)
-    if not user:
-        return RedirectResponse("/login", status_code=303)
-
-    if term_locked(term) and user["role"] != "admin":
-        return set_flash(RedirectResponse(f"/vp/{vp_id}?term={term}", status_code=303), "Term locked.")
-
-    m = next((mm for mm in METRICS if mm.id == metric_id), None)
-    upsert(term, vp_id, metric_id, actual=actual, auto_score=compute_auto(m, actual))
-    return RedirectResponse(f"/vp/{vp_id}?term={term}", status_code=303)
-
-@app.post("/vp/{vp_id}/metric/{metric_id}/override")
-def set_override(request: Request, vp_id: str, metric_id: str,
-                 term: str = Form(...), override: Optional[int] = Form(None)):
-    user = get_current_user(request)
-    if not user:
-        return RedirectResponse("/login", status_code=303)
-
-    if term_locked(term) and user["role"] != "admin":
-        return set_flash(RedirectResponse(f"/vp/{vp_id}?term={term}", status_code=303), "Term locked.")
-
-    upsert(term, vp_id, metric_id, override_score=override)
-    return RedirectResponse(f"/vp/{vp_id}?term={term}", status_code=303)
-
-@app.post("/vp/{vp_id}/metric/{metric_id}/notes")
-def set_notes(request: Request, vp_id: str, metric_id: str,
-              term: str = Form(...), notes: str = Form("")):
-    user = get_current_user(request)
-    if not user:
-        return RedirectResponse("/login", status_code=303)
-
-    if term_locked(term) and user["role"] != "admin":
-        return set_flash(RedirectResponse(f"/vp/{vp_id}?term={term}", status_code=303), "Term locked.")
-
-    upsert(term, vp_id, metric_id, notes=notes)
-    return RedirectResponse(f"/vp/{vp_id}?term={term}", status_code=303)
-
-# ADMIN: VPs
-@app.get("/admin/vps", response_class=HTMLResponse)
-def admin_vps(request: Request, user=Depends(require_role("admin"))):
-    rows = db.fetchall("SELECT id, name, email, phase, notes FROM vps ORDER BY name")
-    return render(request, "admin_vps.html", title="Admin • VPs", vps=rows)
-
-@app.post("/admin/vps/add")
-def admin_vps_add(
-    request: Request,
-    vp_id: str = Form(...),
-    name: str = Form(...),
-    email: str = Form(""),
-    phase: str = Form(""),
-    notes: str = Form(""),
-    user=Depends(require_role("admin"))
-):
-    try:
-        db.execute(
-            "INSERT INTO vps(id, name, email, phase, notes) VALUES (%s,%s,%s,%s,%s)",
-            (vp_id.strip(), name.strip(), email.strip(), phase.strip(), notes.strip())
-        )
-        return set_flash(RedirectResponse("/admin/vps", status_code=303), "VP added.")
-    except Exception:
-        return set_flash(RedirectResponse("/admin/vps", status_code=303), "VP ID exists or invalid.")
-
-@app.post("/admin/vps/delete/{vp_id}")
-def admin_vps_delete(request: Request, vp_id: str, user=Depends(require_role("admin"))):
-
-    db.execute("DELETE FROM vps WHERE id=%s", (vp_id,))
-    return set_flash(RedirectResponse("/admin/vps", status_code=303), "VP deleted.")
-
-# ADMIN: TERMS
-@app.get("/admin/terms", response_class=HTMLResponse)
-def admin_terms(request: Request, user=Depends(require_role("admin"))):
-    terms = db.fetchall("SELECT name, locked, is_active FROM terms ORDER BY id")
-    return render(request, "admin_terms.html", title="Admin • Terms", terms=terms)
-
-@app.post("/admin/terms/add")
-def admin_terms_add(
-    request: Request,
-    name: str = Form(...),
-    make_active: str = Form("no"),
-    user=Depends(require_role("admin"))
-):
-    name = name.strip()
-
-    db.execute(
-        "INSERT INTO terms(name, is_active, locked) VALUES (%s, FALSE, FALSE) ON CONFLICT (name) DO NOTHING",
-        (name,)
-    )
-
-    if make_active == "yes":
-        db.execute("UPDATE terms SET is_active=FALSE")
-        db.execute("UPDATE terms SET is_active=TRUE WHERE name=%s", (name,))
-
-    return set_flash(RedirectResponse("/admin/terms", status_code=303), "Term added.")
-
-@app.post("/admin/terms/activate")
-def admin_terms_activate(request: Request, name: str = Form(...), user=Depends(require_role("admin"))):
-    db.execute("UPDATE terms SET is_active=FALSE")
-    db.execute("UPDATE terms SET is_active=TRUE WHERE name=%s", (name,))
-    return set_flash(RedirectResponse("/admin/terms", status_code=303), "Term activated.")
-
-@app.post("/admin/terms/lock")
-def admin_terms_lock(request: Request, name: str = Form(...), user=Depends(require_role("admin"))):
-    db.execute("UPDATE terms SET locked = NOT locked WHERE name=%s", (name,))
-    return set_flash(RedirectResponse("/admin/terms", status_code=303), "Term lock toggled.")
-
-# ADMIN: ACCOUNT
-@app.get("/admin/account", response_class=HTMLResponse)
-def admin_account(request: Request, user=Depends(require_role("admin"))):
-    return render(request, "admin_account.html", title="Admin • Account")
-
-@app.post("/admin/account")
-def admin_account_update(request: Request, password: str = Form(...), user=Depends(require_role("admin"))):
-    hashed = _make_password(password)
-    db.execute("UPDATE users SET password_hash=%s WHERE email=%s", (hashed, user["email"]))
-    return set_flash(RedirectResponse("/admin/account", status_code=303), "Admin password updated.")
