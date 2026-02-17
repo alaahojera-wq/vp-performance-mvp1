@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Admin • Question Bank</h2>
+</div>
+
+<div class="card">
+  <h3>Add Question</h3>
+  <form method="post" action="/admin/questions/add">
+    <div class="grid">
+      <div>
+        <label class="small">Question Text</label>
+        <textarea name="text" required></textarea>
+      </div>
+      <div>
+        <label class="small">Question Type</label>
+        <select name="qtype">
+          <option value="mcq">Multiple Choice</option>
+          <option value="short">Short Answer</option>
+          <option value="long">Long Answer</option>
+        </select>
+      </div>
+      <div>
+        <label class="small">Options (JSON for MCQ)</label>
+        <textarea name="options" placeholder='e.g., {"A":"Option1","B":"Option2"}'></textarea>
+      </div>
+      <div>
+        <label class="small">Correct Answer</label>
+        <input name="answer" placeholder="Correct answer text or key">
+      </div>
+    </div>
+    <button class="btn" type="submit">Add Question</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Existing Questions</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Text</th><th>Type</th></tr></thead>
+    <tbody>
+      {% for q in questions %}
+      <tr>
+        <td>{{ q[0] }}</td>
+        <td>{{ q[1] }}</td>
+        <td>{{ q[2] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
