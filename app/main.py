@@ -9,6 +9,12 @@ from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from contextlib import contextmanager
+@app.get("/", response_class=HTMLResponse)
+def root(request: Request):
+    user = get_current_user(request)
+    if user:
+        return RedirectResponse("/dashboard")
+    return RedirectResponse("/login")
 
 # ----------------------
 # Environment Variables
