@@ -35,14 +35,16 @@ class DB:
     def __init__(self):
         self.is_pg = bool(DATABASE_URL)
         self.pool = None
-        if self.is_pg:
-            import psycopg
-            from psycopg.pool import SimpleConnectionPool
-            self.pg = psycopg
-            self.pool = SimpleConnectionPool(
-                minconn=1,
-                maxconn=int(os.getenv("PG_POOL_MAX", "5")),
-                dsn=DATABASE_URL,
+       if self.is_pg:
+    import psycopg
+    from psycop import pool
+    self.pg = psycopg
+    self.pool = pool.SimpleConnectionPool(
+        1,
+        int(os.getenv("PG_POOL_MAX", "5")),
+        DATABASE_URL
+    )
+
             )
 
     def connect(self):
