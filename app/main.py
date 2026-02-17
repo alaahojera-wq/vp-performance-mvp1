@@ -36,7 +36,7 @@ class DB:
         self.is_pg = bool(DATABASE_URL)
         self.pool = None
         if self.is_pg:
-            import psycopg2
+            import psycopg
             from psycopg2.pool import SimpleConnectionPool
             self.pg = psycopg2
             self.pool = SimpleConnectionPool(
