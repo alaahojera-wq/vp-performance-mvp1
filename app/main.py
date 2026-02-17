@@ -71,7 +71,8 @@ db = DB()
 # App Initialization
 # ----------------------
 app = FastAPI()
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
 jinja = Environment(
     loader=FileSystemLoader("app/templates"), autoescape=select_autoescape(["html"])
 )
