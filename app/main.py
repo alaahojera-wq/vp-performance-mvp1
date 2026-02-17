@@ -166,8 +166,10 @@ def init_db():
     """)
 
     # Seed users (admin + principal) if missing
-    admin_hash = hash_password(ADMIN_PASSWORD)
-    principal_hash = hash_password(PRINCIPAL_PASSWORD)
+    admin_hash = admin_hash = _make_password(ADMIN_PASSWORD)
+(ADMIN_PASSWORD)
+    principal_hash = admin_hash = _make_password(ADMIN_PASSWORD)
+(PRINCIPAL_PASSWORD)
 
     if db.is_pg:
         db.execute(
