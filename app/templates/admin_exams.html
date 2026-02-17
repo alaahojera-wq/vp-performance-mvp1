@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Admin • Manage Exams</h2>
+</div>
+
+<div class="card">
+  <h3>Create New Exam</h3>
+  <form method="post" action="/admin/exams/add">
+    <div class="grid">
+      <div><label class="small">Exam Name</label><input name="name" placeholder="e.g., Term 1 Mid-Term" required></div>
+      <div><label class="small">Description</label><input name="description" placeholder="Optional description"></div>
+    </div>
+    <button class="btn" type="submit">Create Exam</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Existing Exams</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Name</th><th>Description</th><th>Actions</th></tr></thead>
+    <tbody>
+      {% for exam in exams %}
+      <tr>
+        <td>{{ exam[0] }}</td>
+        <td>{{ exam[1] }}</td>
+        <td>{{ exam[2] or "-" }}</td>
+        <td>
+          <a class="btn secondary" href="/admin/exams/{{ exam[0] }}">View</a>
+          <form method="post" action="/admin/exams/{{ exam[0] }}/delete" style="display:inline;">
+            <button class="btn secondary" type="submit">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
