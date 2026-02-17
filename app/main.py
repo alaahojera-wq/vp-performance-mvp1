@@ -10,6 +10,48 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from contextlib import contextmanager
 
 import jwt
+from dataclasses import dataclass
+from typing import Optional, Dict, Any, List, Tuple
+
+# -------------- Metric & Scoring Definitions --------------
+
+@dataclass
+class Metric:
+    id: str
+    name: str
+    desc: str
+    pillar: int
+    target_type: str
+    target_value: float
+    target_text: str
+
+METRICS = [
+    Metric("p1_internal", "Internal assessments achievement (%)",
+           "Achievement percentage based on internal assessments.", 1, "gte", 80.0, "≥80%"),
+    Metric("p1_pass", "Pass rate (%)",
+           "Overall pass rate for the phase.", 1, "gte", 97.0, "≥97%"),
+    Metric("p1_benchmark", "Benchmark improvement (%)",
+           "Benchmark improvement percentage.", 1, "gte", 80.0, "≥80%"),
+    Metric("p2_staff_att", "Staff attendance (%)",
+           "Staff attendance percentage (excluding approved leaves).", 2, "gte", 96.0, "≥96%"),
+    Metric("p2_parent_sla", "Parent response within 48h (%)",
+           "Parent communications responded to within 48 hours.", 2, "gte", 100.0, "100%"),
+    Metric("p2_plans", "Weekly plans submitted on time (%)",
+           "Weekly plans submitted on or before deadline.", 2, "gte", 100.0, "100%"),
+    Metric("p3_turnover", "Staff turnover (%)",
+           "Annual turnover rate (lower is better).", 3, "lte", 25.0, "≤25%"),
+    Metric("p3_pd", "PD participation (%)",
+           "Participation in professional development activities.", 3, "gte", 90.0, "≥90%"),
+    Metric("p3_culture", "School culture initiatives delivered (%)",
+           "Completion rate of planned culture initiatives.", 3, "gte", 90.0, "≥90%"),
+]
+
+PILLAR_WEIGHTS = {
+    1: 0.60,
+    2: 0.20,
+    3: 0.20
+}
+
 
 # ----------------------
 # Environment Variables
