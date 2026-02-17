@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h2>Exam: {{ exam[1] }}</h2>
+  <p class="small">{{ exam[2] }}</p>
+</div>
+
+<div class="card">
+  <h3>Assign Questions</h3>
+  <form method="post" action="/admin/exams/{{ exam[0] }}/assign">
+    <div>
+      <label class="small">Select Question</label>
+      <select name="question_id">
+        {% for q in questions %}
+          <option value="{{ q[0] }}">({{ q[0] }}) {{ q[1] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="btn" type="submit">Assign</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Assigned Questions</h3>
+  <table>
+    <thead><tr><th>ID</th><th>Text</th></tr></thead>
+    <tbody>
+      {% for q in assigned %}
+      <tr>
+        <td>{{ q[0] }}</td>
+        <td>{{ q[1] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
